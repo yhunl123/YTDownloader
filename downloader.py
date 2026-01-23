@@ -15,6 +15,14 @@ class DownloadWorker(QThread):
         self.is_stopped = False
 
     def run(self):
+        # 1. 영상 유형 판별
+        if "clip/" in self.url:
+            video_type = "클립"
+        elif "shorts/" in self.url:
+            video_type = "쇼츠"
+        else:
+            video_type = "일반"
+
         ydl_opts = {
             'outtmpl': os.path.join(self.options['path'], '%(title)s.%(ext)s'),
             'progress_hooks': [self.progress_hook],
@@ -46,7 +54,7 @@ class DownloadWorker(QThread):
             final_filename = None
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # 1. 메타데이터 추출
+                # 메타데이터 추출
                 info = ydl.extract_info(self.url, download=False)
 
                 filename = ydl.prepare_filename(info)
@@ -72,14 +80,15 @@ class DownloadWorker(QThread):
                 self.info_signal.emit({
                     'title': info.get('title', 'Unknown'),
                     'thumbnail': info.get('thumbnail', ''),
-                    'duration': duration_str, # 포맷팅된 시간 전달
+                    'duration': duration_str,
                     'filesize': size_mb,
-                    'ext': fmt
+                    'ext': fmt,
+                    'video_type': video_type  # 유형 정보 전달
                 })
 
                 if self.is_stopped: return
 
-                # 2. 다운로드 시작
+                # 다운로드 시작
                 ydl.download([self.url])
 
             if not self.is_stopped and final_filename:

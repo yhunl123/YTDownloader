@@ -8,8 +8,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from downloader import DownloadWorker
 
 class DownloadItemWidget(QWidget):
-    remove_requested = pyqtSignal(QWidget) # 개별 삭제 신호
-    cleanup_requested = pyqtSignal()       # 완료된 항목 전체 삭제 신호 (추가됨)
+    remove_requested = pyqtSignal(QWidget)
+    cleanup_requested = pyqtSignal()
 
     def __init__(self, url, settings, restore_data=None):
         super().__init__()
@@ -55,8 +55,8 @@ class DownloadItemWidget(QWidget):
         self.title_label.setStyleSheet("color: white; font-weight: bold; font-size: 14px; border: none; background: transparent;")
         info_layout.addWidget(self.title_label)
 
-        # 2. 메타 정보 (고정됨)
-        self.meta_label = QLabel(f"00:00:00 | - | {self.settings['format']} | {self.settings['quality']}")
+        # 2. 메타 정보 (초기값 placeholder 업데이트)
+        self.meta_label = QLabel(f"00:00:00 | - | {self.settings['format']} | {self.settings['quality']} | -")
         self.meta_label.setStyleSheet("color: #aaaaaa; font-size: 12px; border: none; background: transparent;")
         info_layout.addWidget(self.meta_label)
 
@@ -121,8 +121,9 @@ class DownloadItemWidget(QWidget):
 
     def update_info(self, info):
         self.title_label.setText(info['title'])
-        # 영상 길이(hh:mm:ss) - 용량 - 파일 형식 - 화질
-        meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']}"
+        # 영상 길이 - 용량 - 파일 형식 - 화질 - 영상 유형
+        # info['video_type'] 추가됨
+        meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']} - {info['video_type']}"
         self.meta_label.setText(meta_text)
 
         try:
@@ -178,8 +179,6 @@ class DownloadItemWidget(QWidget):
         stop_action = QAction("다운로드 중지", self)
         retry_action = QAction("재시도", self)
         delete_action = QAction("항목 삭제", self)
-
-        # 메뉴 구분선 및 전체 삭제 메뉴 추가
         cleanup_action = QAction("완료된 항목 전체 삭제", self)
 
         open_loc_action.triggered.connect(self.open_file_location)
@@ -187,7 +186,7 @@ class DownloadItemWidget(QWidget):
         stop_action.triggered.connect(self.stop_download)
         retry_action.triggered.connect(self.retry_download)
         delete_action.triggered.connect(lambda: self.remove_requested.emit(self))
-        cleanup_action.triggered.connect(self.cleanup_requested.emit) # 신호 발생 연결
+        cleanup_action.triggered.connect(self.cleanup_requested.emit)
 
         if self.is_completed:
             menu.addAction(open_loc_action)
@@ -198,8 +197,6 @@ class DownloadItemWidget(QWidget):
         menu.addAction(retry_action)
         menu.addSeparator()
         menu.addAction(delete_action)
-
-        # 맨 아래에 전체 삭제 메뉴 추가
         menu.addSeparator()
         menu.addAction(cleanup_action)
 
