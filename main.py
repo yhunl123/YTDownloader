@@ -20,7 +20,6 @@ class YouTubeDownloaderApp(QMainWindow):
         self.setGeometry(100, 100, 750, 600)
         self.setStyleSheet("background-color: #1e1e1e; color: #ffffff;")
 
-        # 메인 위젯
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -135,11 +134,9 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.warning(self, "오류", "유효하지 않은 유튜브 링크입니다.")
             return
 
-        # 중복 다운로드 방지 로직 (동일 URL이 완료되지 않은 상태로 있다면 차단)
         for i in range(self.list_layout.count()):
             widget = self.list_layout.itemAt(i).widget()
             if widget and isinstance(widget, DownloadItemWidget):
-                # URL이 같고 아직 완료되지 않았다면
                 if widget.url == url and not widget.is_completed:
                     QMessageBox.warning(self, "알림", "이미 리스트에 있는 영상입니다.\n동시 다운로드 시 충돌이 발생할 수 있습니다.")
                     return
@@ -163,6 +160,7 @@ class YouTubeDownloaderApp(QMainWindow):
 
         item_widget = DownloadItemWidget(url, current_options)
         item_widget.remove_requested.connect(self.remove_item)
+        item_widget.cleanup_requested.connect(self.clear_finished_items) # 전체 삭제 연결
 
         self.list_layout.insertWidget(0, item_widget)
         self.url_input.clear()
@@ -197,6 +195,7 @@ class YouTubeDownloaderApp(QMainWindow):
         for data in reversed(history):
             item_widget = DownloadItemWidget(data['url'], data['settings'], restore_data=data)
             item_widget.remove_requested.connect(self.remove_item)
+            item_widget.cleanup_requested.connect(self.clear_finished_items) # 전체 삭제 연결
             self.list_layout.insertWidget(0, item_widget)
 
     def closeEvent(self, event):

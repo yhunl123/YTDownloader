@@ -3,8 +3,8 @@ import yt_dlp
 from PyQt5.QtCore import QThread, pyqtSignal
 
 class DownloadWorker(QThread):
-    progress_signal = pyqtSignal(float, str)  # 진행률, 상태 메시지
-    finished_signal = pyqtSignal(str)         # 완료 시 최종 파일 경로 전달
+    progress_signal = pyqtSignal(float, str)
+    finished_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
     info_signal = pyqtSignal(dict)
 
@@ -49,7 +49,6 @@ class DownloadWorker(QThread):
                 # 1. 메타데이터 추출
                 info = ydl.extract_info(self.url, download=False)
 
-                # 파일명 예측
                 filename = ydl.prepare_filename(info)
                 if fmt == 'mp3':
                     base, _ = os.path.splitext(filename)
@@ -57,18 +56,24 @@ class DownloadWorker(QThread):
                 else:
                     final_filename = filename
 
-                # 용량 계산 (바이트 -> MB)
+                # 용량 계산
                 filesize = info.get('filesize') or info.get('filesize_approx')
                 if filesize:
                     size_mb = f"{filesize / (1024 * 1024):.1f}MB"
                 else:
                     size_mb = "용량 미정"
 
+                # 시간 포맷팅 (hh:mm:ss)
+                duration_sec = info.get('duration', 0)
+                m, s = divmod(duration_sec, 60)
+                h, m = divmod(m, 60)
+                duration_str = f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
+
                 self.info_signal.emit({
                     'title': info.get('title', 'Unknown'),
                     'thumbnail': info.get('thumbnail', ''),
-                    'duration': info.get('duration_string', '00:00'),
-                    'filesize': size_mb, # 용량 정보 추가
+                    'duration': duration_str, # 포맷팅된 시간 전달
+                    'filesize': size_mb,
                     'ext': fmt
                 })
 

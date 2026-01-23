@@ -8,7 +8,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from downloader import DownloadWorker
 
 class DownloadItemWidget(QWidget):
-    remove_requested = pyqtSignal(QWidget)
+    remove_requested = pyqtSignal(QWidget) # 개별 삭제 신호
+    cleanup_requested = pyqtSignal()       # 완료된 항목 전체 삭제 신호 (추가됨)
 
     def __init__(self, url, settings, restore_data=None):
         super().__init__()
@@ -27,7 +28,7 @@ class DownloadItemWidget(QWidget):
             self.start_download()
 
     def init_ui(self):
-        self.setFixedHeight(110) # 높이를 조금 늘려 공간 확보
+        self.setFixedHeight(110)
         self.setStyleSheet("""
             QWidget {
                 background-color: #2b2b2b; 
@@ -47,7 +48,7 @@ class DownloadItemWidget(QWidget):
 
         # 정보 영역
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(2) # 간격 조정
+        info_layout.setSpacing(2)
 
         # 1. 제목
         self.title_label = QLabel("정보 불러오는 중...")
@@ -55,12 +56,11 @@ class DownloadItemWidget(QWidget):
         info_layout.addWidget(self.title_label)
 
         # 2. 메타 정보 (고정됨)
-        # 초기값 설정
-        self.meta_label = QLabel(f"- | - | {self.settings['format']} | {self.settings['quality']}")
+        self.meta_label = QLabel(f"00:00:00 | - | {self.settings['format']} | {self.settings['quality']}")
         self.meta_label.setStyleSheet("color: #aaaaaa; font-size: 12px; border: none; background: transparent;")
         info_layout.addWidget(self.meta_label)
 
-        # 3. 상태 메시지 (진행상황 표시용) - 새로 추가됨
+        # 3. 상태 메시지
         self.status_label = QLabel("대기 중...")
         self.status_label.setStyleSheet("color: #3498db; font-size: 11px; border: none; background: transparent;")
         info_layout.addWidget(self.status_label)
@@ -121,7 +121,7 @@ class DownloadItemWidget(QWidget):
 
     def update_info(self, info):
         self.title_label.setText(info['title'])
-        # 영상 길이 - 용량 - 파일 형식 - 화질 (고정 정보)
+        # 영상 길이(hh:mm:ss) - 용량 - 파일 형식 - 화질
         meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']}"
         self.meta_label.setText(meta_text)
 
@@ -136,7 +136,6 @@ class DownloadItemWidget(QWidget):
     def update_progress(self, value, msg):
         self.pbar.setValue(int(value))
         if value < 100:
-            # 상태 라벨만 업데이트 (메타 라벨은 건드리지 않음)
             self.status_label.setText(f"{msg} ({value:.1f}%)")
 
     def on_finished(self, final_path):
@@ -180,11 +179,15 @@ class DownloadItemWidget(QWidget):
         retry_action = QAction("재시도", self)
         delete_action = QAction("항목 삭제", self)
 
+        # 메뉴 구분선 및 전체 삭제 메뉴 추가
+        cleanup_action = QAction("완료된 항목 전체 삭제", self)
+
         open_loc_action.triggered.connect(self.open_file_location)
         copy_action.triggered.connect(lambda: QApplication.clipboard().setText(self.url))
         stop_action.triggered.connect(self.stop_download)
         retry_action.triggered.connect(self.retry_download)
         delete_action.triggered.connect(lambda: self.remove_requested.emit(self))
+        cleanup_action.triggered.connect(self.cleanup_requested.emit) # 신호 발생 연결
 
         if self.is_completed:
             menu.addAction(open_loc_action)
@@ -195,6 +198,10 @@ class DownloadItemWidget(QWidget):
         menu.addAction(retry_action)
         menu.addSeparator()
         menu.addAction(delete_action)
+
+        # 맨 아래에 전체 삭제 메뉴 추가
+        menu.addSeparator()
+        menu.addAction(cleanup_action)
 
         menu.exec_(self.mapToGlobal(pos))
 
