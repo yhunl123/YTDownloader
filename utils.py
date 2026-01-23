@@ -3,6 +3,7 @@ import os
 import re
 
 SETTINGS_FILE = 'settings.json'
+HISTORY_FILE = 'history.json'
 
 DEFAULT_SETTINGS = {
     "save_path": os.path.join(os.getcwd(), "download"),
@@ -26,8 +27,23 @@ def save_settings(settings):
     except Exception as e:
         print(f"설정 저장 실패: {e}")
 
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_history(history_data):
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history_data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"히스토리 저장 실패: {e}")
+
 def validate_url(url):
-    # 유튜브 영상 및 쇼츠 URL 패턴 확인
     youtube_regex = (
         r'(https?://)?(www\.)?'
         r'(youtube|youtu|youtube-nocookie)\.(com|be)/'
