@@ -1,10 +1,9 @@
 import sys
 import os
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLineEdit, QPushButton, QLabel, QComboBox, QFileDialog,
                              QScrollArea, QMessageBox)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
 
 from utils import load_settings, save_settings, validate_url
 from widgets import DownloadItemWidget
@@ -17,49 +16,51 @@ class YouTubeDownloaderApp(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("YouTube Downloader")
-        self.setGeometry(100, 100, 700, 600)
+        self.setGeometry(100, 100, 750, 600) # 너비를 조금 늘려서 여유 확보
         self.setStyleSheet("background-color: #1e1e1e; color: #ffffff;")
 
         # 메인 위젯
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- 상단 입력부 ---
+        # --- 상단 입력부 (Grid Layout 사용) ---
+        input_grid = QGridLayout()
+        input_grid.setSpacing(10)
+        # 열(Column) 비율 설정: 입력창(Col 1)이 늘어나도록 설정
+        input_grid.setColumnStretch(1, 1)
 
-        # 1. 링크 URL 입력
-        url_layout = QHBoxLayout()
+        # 1. 링크 URL 행
         url_label = QLabel("링크 URL :")
         url_label.setFixedWidth(80)
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://www.youtube.com/...")
+        self.url_input.setPlaceholderText("")
         self.url_input.setStyleSheet("padding: 5px; background-color: #333; border: 1px solid #555; color: white;")
-        self.url_input.returnPressed.connect(self.add_download_task) # 엔터키 이벤트
+        self.url_input.returnPressed.connect(self.add_download_task)
 
         self.btn_input = QPushButton("입력")
         self.btn_input.setFixedWidth(60)
         self.btn_input.setStyleSheet("background-color: #444; padding: 5px;")
         self.btn_input.clicked.connect(self.add_download_task)
 
-        # 파일 형식 콤보박스
         lbl_fmt = QLabel("파일 형식")
+        lbl_fmt.setAlignment(Qt.AlignCenter)
         self.combo_format = QComboBox()
         self.combo_format.addItems(["mp4", "mkv", "mp3"])
         self.combo_format.setCurrentIndex(self.settings.get('format_index', 0))
         self.combo_format.setStyleSheet("background-color: #333; color: white; padding: 3px;")
+        self.combo_format.setFixedWidth(80)
 
-        url_layout.addWidget(url_label)
-        url_layout.addWidget(self.url_input)
-        url_layout.addWidget(self.btn_input)
-        url_layout.addWidget(lbl_fmt)
-        url_layout.addWidget(self.combo_format)
+        # Grid 배치 (Row 0)
+        input_grid.addWidget(url_label, 0, 0)
+        input_grid.addWidget(self.url_input, 0, 1)
+        input_grid.addWidget(self.btn_input, 0, 2)
+        input_grid.addWidget(lbl_fmt, 0, 3)
+        input_grid.addWidget(self.combo_format, 0, 4)
 
-        main_layout.addLayout(url_layout)
-
-        # 2. 저장 경로
-        path_layout = QHBoxLayout()
+        # 2. 저장 경로 행
         path_label = QLabel("저장 경로 :")
         path_label.setFixedWidth(80)
         self.path_input = QLineEdit()
@@ -71,29 +72,30 @@ class YouTubeDownloaderApp(QMainWindow):
         self.btn_find.setStyleSheet("background-color: #444; padding: 5px;")
         self.btn_find.clicked.connect(self.select_directory)
 
-        # 화질 콤보박스
         lbl_quality = QLabel("화질")
-        lbl_quality.setFixedWidth(55) # 라벨 너비 조정
+        lbl_quality.setAlignment(Qt.AlignCenter)
         self.combo_quality = QComboBox()
         self.combo_quality.addItems(["최고", "1080p", "720p", "480p", "360p"])
         self.combo_quality.setCurrentIndex(self.settings.get('quality_index', 0))
         self.combo_quality.setStyleSheet("background-color: #333; color: white; padding: 3px;")
+        self.combo_quality.setFixedWidth(80)
 
-        path_layout.addWidget(path_label)
-        path_layout.addWidget(self.path_input)
-        path_layout.addWidget(self.btn_find)
-        path_layout.addWidget(lbl_quality)
-        path_layout.addWidget(self.combo_quality)
+        # Grid 배치 (Row 1)
+        input_grid.addWidget(path_label, 1, 0)
+        input_grid.addWidget(self.path_input, 1, 1)
+        input_grid.addWidget(self.btn_find, 1, 2)
+        input_grid.addWidget(lbl_quality, 1, 3)
+        input_grid.addWidget(self.combo_quality, 1, 4)
 
-        main_layout.addLayout(path_layout)
+        main_layout.addLayout(input_grid)
 
         # 구분선
         line = QLabel()
-        line.setStyleSheet("border-top: 1px solid #555; margin-top: 10px; margin-bottom: 10px;")
+        line.setStyleSheet("border-top: 1px solid #555; margin-top: 5px; margin-bottom: 5px;")
         line.setFixedHeight(1)
         main_layout.addWidget(line)
 
-        # 3. 리스트 헤더 (이미지처럼 스타일링)
+        # 3. 리스트 헤더
         header_frame = QWidget()
         header_frame.setStyleSheet("border: 1px solid #777; background-color: #2e2e2e;")
         header_layout = QHBoxLayout(header_frame)
@@ -105,7 +107,7 @@ class YouTubeDownloaderApp(QMainWindow):
         lbl_h3 = QLabel("영상 길이 - 용량 - 파일 형식 - 화질")
         lbl_h3.setAlignment(Qt.AlignCenter)
 
-        header_layout.addWidget(lbl_h1, 1) # 비율 조정
+        header_layout.addWidget(lbl_h1, 1)
         header_layout.addWidget(lbl_h2, 2)
         header_layout.addWidget(lbl_h3, 2)
         main_layout.addWidget(header_frame)
@@ -117,7 +119,7 @@ class YouTubeDownloaderApp(QMainWindow):
 
         self.list_container = QWidget()
         self.list_layout = QVBoxLayout(self.list_container)
-        self.list_layout.setAlignment(Qt.AlignTop) # 위에서부터 쌓이도록
+        self.list_layout.setAlignment(Qt.AlignTop)
         self.list_layout.setSpacing(5)
 
         self.scroll_area.setWidget(self.list_container)
@@ -138,7 +140,6 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.warning(self, "오류", "유효하지 않은 유튜브 링크입니다.")
             return
 
-        # 경로 유효성 검사 및 생성
         save_path = self.path_input.text().strip()
         if not save_path:
             save_path = os.path.join(os.getcwd(), "download")
@@ -150,18 +151,15 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.critical(self, "오류", f"경로를 생성할 수 없습니다.\n{e}")
             return
 
-        # 현재 설정 저장
         current_options = {
             'path': save_path,
             'format': self.combo_format.currentText(),
             'quality': self.combo_quality.currentText()
         }
 
-        # 리스트 아이템 생성 및 추가
         item_widget = DownloadItemWidget(url, current_options)
         item_widget.remove_requested.connect(self.remove_item)
 
-        # 최신 항목을 상단(0번 인덱스)에 추가
         self.list_layout.insertWidget(0, item_widget)
 
         self.url_input.clear()

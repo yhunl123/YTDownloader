@@ -1,6 +1,5 @@
 import requests
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                             QProgressBar, QMenu, QAction)
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QProgressBar, QMenu, QAction)
 from PyQt5.QtGui import QPixmap, QImage, QCursor
 from PyQt5.QtCore import Qt, pyqtSignal
 from downloader import DownloadWorker
