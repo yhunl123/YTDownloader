@@ -15,7 +15,6 @@ class DownloadWorker(QThread):
         self.is_stopped = False
 
     def run(self):
-        # yt-dlp 옵션 설정
         ydl_opts = {
             'outtmpl': os.path.join(self.options['path'], '%(title)s.%(ext)s'),
             'progress_hooks': [self.progress_hook],
@@ -47,23 +46,29 @@ class DownloadWorker(QThread):
             final_filename = None
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # 1. 메타데이터 추출 및 파일명 예측
+                # 1. 메타데이터 추출
                 info = ydl.extract_info(self.url, download=False)
 
-                # 예측된 파일명 가져오기
+                # 파일명 예측
                 filename = ydl.prepare_filename(info)
-
-                # mp3 변환 시 확장자 강제 조정 (prepare_filename은 원본 확장자를 줄 수 있음)
                 if fmt == 'mp3':
                     base, _ = os.path.splitext(filename)
                     final_filename = base + ".mp3"
                 else:
                     final_filename = filename
 
+                # 용량 계산 (바이트 -> MB)
+                filesize = info.get('filesize') or info.get('filesize_approx')
+                if filesize:
+                    size_mb = f"{filesize / (1024 * 1024):.1f}MB"
+                else:
+                    size_mb = "용량 미정"
+
                 self.info_signal.emit({
                     'title': info.get('title', 'Unknown'),
                     'thumbnail': info.get('thumbnail', ''),
                     'duration': info.get('duration_string', '00:00'),
+                    'filesize': size_mb, # 용량 정보 추가
                     'ext': fmt
                 })
 
@@ -73,7 +78,6 @@ class DownloadWorker(QThread):
                 ydl.download([self.url])
 
             if not self.is_stopped and final_filename:
-                # 최종 완료 신호와 함께 파일 경로 전달
                 self.finished_signal.emit(final_filename)
 
         except Exception as e:

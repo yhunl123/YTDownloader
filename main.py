@@ -36,7 +36,6 @@ class YouTubeDownloaderApp(QMainWindow):
         url_label = QLabel("링크 URL :")
         url_label.setFixedWidth(80)
         self.url_input = QLineEdit()
-        # 플레이스홀더 삭제됨 (빈 문자열)
         self.url_input.setStyleSheet("padding: 5px; background-color: #333; border: 1px solid #555; color: white;")
         self.url_input.returnPressed.connect(self.add_download_task)
 
@@ -135,6 +134,15 @@ class YouTubeDownloaderApp(QMainWindow):
         if not validate_url(url):
             QMessageBox.warning(self, "오류", "유효하지 않은 유튜브 링크입니다.")
             return
+
+        # 중복 다운로드 방지 로직 (동일 URL이 완료되지 않은 상태로 있다면 차단)
+        for i in range(self.list_layout.count()):
+            widget = self.list_layout.itemAt(i).widget()
+            if widget and isinstance(widget, DownloadItemWidget):
+                # URL이 같고 아직 완료되지 않았다면
+                if widget.url == url and not widget.is_completed:
+                    QMessageBox.warning(self, "알림", "이미 리스트에 있는 영상입니다.\n동시 다운로드 시 충돌이 발생할 수 있습니다.")
+                    return
 
         save_path = self.path_input.text().strip()
         if not save_path:

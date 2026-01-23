@@ -16,7 +16,7 @@ class DownloadItemWidget(QWidget):
         self.settings = settings
         self.worker = None
         self.is_completed = False
-        self.saved_path = None # 최종 저장된 파일 경로
+        self.saved_path = None
         self.restore_data = restore_data
 
         self.init_ui()
@@ -27,7 +27,7 @@ class DownloadItemWidget(QWidget):
             self.start_download()
 
     def init_ui(self):
-        self.setFixedHeight(100)
+        self.setFixedHeight(110) # 높이를 조금 늘려 공간 확보
         self.setStyleSheet("""
             QWidget {
                 background-color: #2b2b2b; 
@@ -47,20 +47,30 @@ class DownloadItemWidget(QWidget):
 
         # 정보 영역
         info_layout = QVBoxLayout()
+        info_layout.setSpacing(2) # 간격 조정
 
+        # 1. 제목
         self.title_label = QLabel("정보 불러오는 중...")
         self.title_label.setStyleSheet("color: white; font-weight: bold; font-size: 14px; border: none; background: transparent;")
         info_layout.addWidget(self.title_label)
 
-        self.meta_label = QLabel(f"준비 중... | {self.settings['format']}")
+        # 2. 메타 정보 (고정됨)
+        # 초기값 설정
+        self.meta_label = QLabel(f"- | - | {self.settings['format']} | {self.settings['quality']}")
         self.meta_label.setStyleSheet("color: #aaaaaa; font-size: 12px; border: none; background: transparent;")
         info_layout.addWidget(self.meta_label)
 
+        # 3. 상태 메시지 (진행상황 표시용) - 새로 추가됨
+        self.status_label = QLabel("대기 중...")
+        self.status_label.setStyleSheet("color: #3498db; font-size: 11px; border: none; background: transparent;")
+        info_layout.addWidget(self.status_label)
+
+        # 4. 프로그레스 바
         self.pbar = QProgressBar()
-        self.pbar.setFixedHeight(10)
+        self.pbar.setFixedHeight(8)
         self.pbar.setStyleSheet("""
-            QProgressBar { border: none; background-color: #444; border-radius: 5px; }
-            QProgressBar::chunk { background-color: #3498db; border-radius: 5px; }
+            QProgressBar { border: none; background-color: #444; border-radius: 4px; }
+            QProgressBar::chunk { background-color: #3498db; border-radius: 4px; }
         """)
         info_layout.addWidget(self.pbar)
 
@@ -74,15 +84,18 @@ class DownloadItemWidget(QWidget):
         data = self.restore_data
         self.title_label.setText(data.get('title', 'Unknown'))
         self.meta_label.setText(data.get('meta_text', ''))
-        self.saved_path = data.get('saved_path', None) # 저장된 경로 복구
+        self.saved_path = data.get('saved_path', None)
 
         if data.get('is_completed', False):
             self.pbar.setValue(100)
             self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #2ecc71; }")
+            self.status_label.setText("다운로드 완료")
+            self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px; border: none; background: transparent;")
             self.is_completed = True
         else:
             self.pbar.setValue(int(data.get('progress', 0)))
-            self.meta_label.setText("중단됨 (이전 세션)")
+            self.status_label.setText("중단됨 (이전 세션)")
+            self.status_label.setStyleSheet("color: #e67e22; font-size: 11px; border: none; background: transparent;")
             self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #e67e22; }")
 
     def get_state(self):
@@ -93,7 +106,7 @@ class DownloadItemWidget(QWidget):
             'meta_text': self.meta_label.text(),
             'progress': self.pbar.value(),
             'is_completed': self.is_completed,
-            'saved_path': self.saved_path # 경로 저장
+            'saved_path': self.saved_path
         }
 
     def start_download(self):
@@ -108,7 +121,9 @@ class DownloadItemWidget(QWidget):
 
     def update_info(self, info):
         self.title_label.setText(info['title'])
-        self.meta_label.setText(f"{info['duration']} | {info['ext']} | {self.settings['quality']}")
+        # 영상 길이 - 용량 - 파일 형식 - 화질 (고정 정보)
+        meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']}"
+        self.meta_label.setText(meta_text)
 
         try:
             image_data = requests.get(info['thumbnail']).content
@@ -121,29 +136,35 @@ class DownloadItemWidget(QWidget):
     def update_progress(self, value, msg):
         self.pbar.setValue(int(value))
         if value < 100:
-            self.meta_label.setText(f"{msg} ({value:.1f}%)")
+            # 상태 라벨만 업데이트 (메타 라벨은 건드리지 않음)
+            self.status_label.setText(f"{msg} ({value:.1f}%)")
 
     def on_finished(self, final_path):
         self.pbar.setValue(100)
         self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #2ecc71; }")
-        self.meta_label.setText("다운로드 완료")
-        self.saved_path = final_path # 최종 경로 저장
+        self.status_label.setText("다운로드 완료")
+        self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px; border: none; background: transparent;")
+        self.saved_path = final_path
         self.worker = None
         self.is_completed = True
 
     def on_error(self, err_msg):
         self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #e74c3c; }")
-        self.meta_label.setText(f"오류: {err_msg}")
+        self.status_label.setText(f"오류: {err_msg}")
+        self.status_label.setStyleSheet("color: #e74c3c; font-size: 11px; border: none; background: transparent;")
         self.worker = None
 
     def stop_download(self):
         if self.worker and self.worker.isRunning():
             self.worker.stop()
-            self.meta_label.setText("다운로드 중지됨")
+            self.status_label.setText("다운로드 중지됨")
 
     def retry_download(self):
         if self.worker and self.worker.isRunning():
             return
+        self.status_label.setText("재시도 중...")
+        self.status_label.setStyleSheet("color: #3498db; font-size: 11px; border: none; background: transparent;")
+        self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #3498db; border-radius: 4px; }")
         self.start_download()
 
     def show_context_menu(self, pos):
@@ -153,7 +174,7 @@ class DownloadItemWidget(QWidget):
             QMenu::item:selected { background-color: #555; }
         """)
 
-        open_loc_action = QAction("파일 위치 열기", self) # 추가된 메뉴
+        open_loc_action = QAction("파일 위치 열기", self)
         copy_action = QAction("영상 URL 복사", self)
         stop_action = QAction("다운로드 중지", self)
         retry_action = QAction("재시도", self)
@@ -165,7 +186,6 @@ class DownloadItemWidget(QWidget):
         retry_action.triggered.connect(self.retry_download)
         delete_action.triggered.connect(lambda: self.remove_requested.emit(self))
 
-        # 메뉴 구성
         if self.is_completed:
             menu.addAction(open_loc_action)
             menu.addSeparator()
@@ -179,23 +199,18 @@ class DownloadItemWidget(QWidget):
         menu.exec_(self.mapToGlobal(pos))
 
     def open_file_location(self):
-        """파일 위치 열기 로직"""
         if not self.saved_path:
             QMessageBox.warning(self, "알림", "저장된 파일 경로 정보가 없습니다.")
             return
 
-        # 1. 파일이 존재하는지 확인
         if os.path.exists(self.saved_path):
             try:
-                # Windows: explorer /select,"path" (파일 선택 상태로 폴더 열기)
                 if os.name == 'nt':
                     subprocess.Popen(['explorer', '/select,', os.path.normpath(self.saved_path)])
                 else:
-                    # Mac/Linux: 폴더만 엶 (선택 기능은 OS 의존적이라 복잡함)
                     folder_path = os.path.dirname(self.saved_path)
                     subprocess.Popen(['xdg-open' if os.name == 'posix' else 'open', folder_path])
             except Exception as e:
                 QMessageBox.warning(self, "오류", f"폴더를 여는 중 오류가 발생했습니다.\n{e}")
         else:
-            # 2. 파일이 없으면 알림 표시
             QMessageBox.warning(self, "파일 없음", "파일을 찾을 수 없습니다.")
