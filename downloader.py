@@ -23,10 +23,13 @@ class DownloadWorker(QThread):
         else:
             video_type = "일반"
 
+        # 2. 옵션 설정 (로그 억제 포함)
         ydl_opts = {
             'outtmpl': os.path.join(self.options['path'], '%(title)s.%(ext)s'),
             'progress_hooks': [self.progress_hook],
             'noplaylist': True,
+            'quiet': True,           # 콘솔 로그 억제 (딜레이 체감 감소)
+            'no_warnings': True,     # 경고 메시지 억제
         }
 
         fmt = self.options['format']
@@ -64,12 +67,15 @@ class DownloadWorker(QThread):
                 else:
                     final_filename = filename
 
-                # 용량 계산
-                filesize = info.get('filesize') or info.get('filesize_approx')
+                # 용량 계산 (클립은 용량 정보가 없을 수 있음)
+                filesize = info.get('filesize')
+                if not filesize:
+                    filesize = info.get('filesize_approx') # 예상 용량 시도
+
                 if filesize:
                     size_mb = f"{filesize / (1024 * 1024):.1f}MB"
                 else:
-                    size_mb = "용량 미정"
+                    size_mb = "알 수 없음"
 
                 # 시간 포맷팅 (hh:mm:ss)
                 duration_sec = info.get('duration', 0)
@@ -83,7 +89,7 @@ class DownloadWorker(QThread):
                     'duration': duration_str,
                     'filesize': size_mb,
                     'ext': fmt,
-                    'video_type': video_type  # 유형 정보 전달
+                    'video_type': video_type
                 })
 
                 if self.is_stopped: return
@@ -104,8 +110,21 @@ class DownloadWorker(QThread):
 
         if d['status'] == 'downloading':
             try:
-                p = d.get('_percent_str', '0%').replace('%', '')
-                self.progress_signal.emit(float(p), "다운로드 중...")
+                # 일반적인 진행률 가져오기
+                p_str = d.get('_percent_str', '').replace('%', '')
+
+                if p_str:
+                    progress = float(p_str)
+                else:
+                    # 클립 등에서 퍼센트 정보가 없을 경우 수동 계산
+                    downloaded = d.get('downloaded_bytes', 0)
+                    total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                    if total > 0:
+                        progress = (downloaded / total) * 100
+                    else:
+                        progress = 0
+
+                self.progress_signal.emit(progress, "다운로드 중...")
             except:
                 pass
         elif d['status'] == 'finished':
