@@ -4,9 +4,9 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 class DownloadWorker(QThread):
     progress_signal = pyqtSignal(float, str)  # 진행률, 상태 메시지
-    finished_signal = pyqtSignal()
+    finished_signal = pyqtSignal(str)         # 완료 시 최종 파일 경로 전달
     error_signal = pyqtSignal(str)
-    info_signal = pyqtSignal(dict) # 썸네일, 제목 등 정보 전달
+    info_signal = pyqtSignal(dict)
 
     def __init__(self, url, options):
         super().__init__()
@@ -22,7 +22,6 @@ class DownloadWorker(QThread):
             'noplaylist': True,
         }
 
-        # 포맷 및 화질 설정
         fmt = self.options['format']
         quality = self.options['quality']
 
@@ -36,7 +35,6 @@ class DownloadWorker(QThread):
                 }],
             })
         else:
-            # 비디오 포맷
             if quality == '최고':
                 ydl_opts['format'] = f"bestvideo+bestaudio/best"
             else:
@@ -46,9 +44,22 @@ class DownloadWorker(QThread):
             ydl_opts['merge_output_format'] = fmt
 
         try:
+            final_filename = None
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # 메타데이터 먼저 추출
+                # 1. 메타데이터 추출 및 파일명 예측
                 info = ydl.extract_info(self.url, download=False)
+
+                # 예측된 파일명 가져오기
+                filename = ydl.prepare_filename(info)
+
+                # mp3 변환 시 확장자 강제 조정 (prepare_filename은 원본 확장자를 줄 수 있음)
+                if fmt == 'mp3':
+                    base, _ = os.path.splitext(filename)
+                    final_filename = base + ".mp3"
+                else:
+                    final_filename = filename
+
                 self.info_signal.emit({
                     'title': info.get('title', 'Unknown'),
                     'thumbnail': info.get('thumbnail', ''),
@@ -58,11 +69,12 @@ class DownloadWorker(QThread):
 
                 if self.is_stopped: return
 
-                # 다운로드 시작
+                # 2. 다운로드 시작
                 ydl.download([self.url])
 
-            if not self.is_stopped:
-                self.finished_signal.emit()
+            if not self.is_stopped and final_filename:
+                # 최종 완료 신호와 함께 파일 경로 전달
+                self.finished_signal.emit(final_filename)
 
         except Exception as e:
             if not self.is_stopped:

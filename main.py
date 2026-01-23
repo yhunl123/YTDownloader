@@ -2,7 +2,7 @@ import sys
 import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLineEdit, QPushButton, QLabel, QComboBox, QFileDialog,
-                             QScrollArea, QMessageBox, QMenu, QAction) # QMenu, QAction 추가
+                             QScrollArea, QMessageBox, QMenu, QAction)
 from PyQt5.QtCore import Qt
 
 from utils import load_settings, save_settings, validate_url, load_history, save_history
@@ -13,7 +13,7 @@ class YouTubeDownloaderApp(QMainWindow):
         super().__init__()
         self.settings = load_settings()
         self.init_ui()
-        self.restore_history_items() # 히스토리 복구
+        self.restore_history_items()
 
     def init_ui(self):
         self.setWindowTitle("YouTube Downloader")
@@ -27,16 +27,16 @@ class YouTubeDownloaderApp(QMainWindow):
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- 상단 입력부 (Grid Layout) ---
+        # --- 상단 입력부 ---
         input_grid = QGridLayout()
         input_grid.setSpacing(10)
         input_grid.setColumnStretch(1, 1)
 
-        # Row 0: URL 입력
+        # Row 0
         url_label = QLabel("링크 URL :")
         url_label.setFixedWidth(80)
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://www.youtube.com/...")
+        # 플레이스홀더 삭제됨 (빈 문자열)
         self.url_input.setStyleSheet("padding: 5px; background-color: #333; border: 1px solid #555; color: white;")
         self.url_input.returnPressed.connect(self.add_download_task)
 
@@ -59,7 +59,7 @@ class YouTubeDownloaderApp(QMainWindow):
         input_grid.addWidget(lbl_fmt, 0, 3)
         input_grid.addWidget(self.combo_format, 0, 4)
 
-        # Row 1: 저장 경로
+        # Row 1
         path_label = QLabel("저장 경로 :")
         path_label.setFixedWidth(80)
         self.path_input = QLineEdit()
@@ -93,12 +93,9 @@ class YouTubeDownloaderApp(QMainWindow):
         line.setFixedHeight(1)
         main_layout.addWidget(line)
 
-        # --- 헤더 제거됨 (요청사항 2) ---
-
-        # 4. 다운로드 리스트 (스크롤 영역) - 스타일 개선 (음각 효과)
+        # 4. 다운로드 리스트
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        # 음각 효과를 위한 스타일시트 적용
         self.scroll_area.setStyleSheet("""
             QScrollArea {
                 border: 2px inset #2a2a2a;
@@ -114,15 +111,13 @@ class YouTubeDownloaderApp(QMainWindow):
         """)
 
         self.list_container = QWidget()
-        self.list_container.setStyleSheet("background-color: #222;") # 컨테이너 배경색 일치
+        self.list_container.setStyleSheet("background-color: #222;")
         self.list_layout = QVBoxLayout(self.list_container)
         self.list_layout.setAlignment(Qt.AlignTop)
-        self.list_layout.setSpacing(0) # 항목 간 간격 0으로 설정 (widget의 border-bottom이 구분선 역할)
+        self.list_layout.setSpacing(0)
         self.list_layout.setContentsMargins(0,0,0,0)
 
         self.scroll_area.setWidget(self.list_container)
-
-        # 리스트 영역 우클릭 메뉴 설정
         self.scroll_area.setContextMenuPolicy(Qt.CustomContextMenu)
         self.scroll_area.customContextMenuRequested.connect(self.show_list_context_menu)
 
@@ -158,7 +153,6 @@ class YouTubeDownloaderApp(QMainWindow):
             'quality': self.combo_quality.currentText()
         }
 
-        # 새 항목 생성 (복구 데이터 없음)
         item_widget = DownloadItemWidget(url, current_options)
         item_widget.remove_requested.connect(self.remove_item)
 
@@ -171,7 +165,6 @@ class YouTubeDownloaderApp(QMainWindow):
         widget.deleteLater()
 
     def show_list_context_menu(self, pos):
-        # 다운로드 리스트 전체에 대한 우클릭 메뉴
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu { background-color: #333; color: white; border: 1px solid #555; }
@@ -185,7 +178,6 @@ class YouTubeDownloaderApp(QMainWindow):
         menu.exec_(self.scroll_area.mapToGlobal(pos))
 
     def clear_finished_items(self):
-        # 역순으로 순회하며 삭제 (인덱스 문제 방지)
         for i in range(self.list_layout.count() - 1, -1, -1):
             widget = self.list_layout.itemAt(i).widget()
             if widget and isinstance(widget, DownloadItemWidget):
@@ -194,18 +186,12 @@ class YouTubeDownloaderApp(QMainWindow):
 
     def restore_history_items(self):
         history = load_history()
-        # 저장된 순서대로 복원 (최신이 위로 가도록 하려면 역순으로 insertWidget(0) 하거나,
-        # 리스트에 저장될 때 순서를 고려해야 함. 여기선 단순히 append 후 insertWidget(0) 이므로
-        # 저장 시 최상단부터 저장했다면, 불러올 때 역순으로 넣어야 원래 순서 유지.
-        # 편의상 그냥 순서대로 불러와서 쌓음.
-
-        for data in reversed(history): # 역순 순회하여 insertWidget(0) 시 순서 유지
+        for data in reversed(history):
             item_widget = DownloadItemWidget(data['url'], data['settings'], restore_data=data)
             item_widget.remove_requested.connect(self.remove_item)
             self.list_layout.insertWidget(0, item_widget)
 
     def closeEvent(self, event):
-        # 설정 저장
         new_settings = {
             "save_path": self.path_input.text(),
             "format_index": self.combo_format.currentIndex(),
@@ -213,14 +199,12 @@ class YouTubeDownloaderApp(QMainWindow):
         }
         save_settings(new_settings)
 
-        # 히스토리 저장
         history_data = []
-        # Layout의 위젯들을 순회하며 상태 저장
         for i in range(self.list_layout.count()):
             widget = self.list_layout.itemAt(i).widget()
             if widget and isinstance(widget, DownloadItemWidget):
                 history_data.append(widget.get_state())
-                widget.stop_download() # 종료 시 쓰레드 중지
+                widget.stop_download()
 
         save_history(history_data)
         event.accept()
