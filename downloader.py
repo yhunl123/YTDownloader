@@ -1,9 +1,8 @@
 import os
 import yt_dlp
 from PyQt5.QtCore import QThread, pyqtSignal
-from utils import hms_to_seconds
 
-# --- 메타데이터만 빠르게 가져오는 워커 (403 방지 옵션 추가) ---
+# --- 메타데이터 워커 ---
 class MetadataWorker(QThread):
     info_fetched = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
@@ -16,15 +15,10 @@ class MetadataWorker(QThread):
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            # [추가] 403 에러 방지를 위한 헤더 및 클라이언트 설정
-            'nocheckcertificate': True,
+            # [수정] 화질 저하 원인이던 'extractor_args' 제거 (Web 클라이언트 복귀)
+            # 403 방지를 위한 헤더는 유지
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'], # 안드로이드 클라이언트로 우회 시도
-                }
             }
         }
         try:
@@ -35,7 +29,7 @@ class MetadataWorker(QThread):
         except Exception as e:
             self.error_occurred.emit(str(e))
 
-# --- 실제 다운로드 워커 ---
+# --- 다운로드 워커 ---
 class DownloadWorker(QThread):
     progress_signal = pyqtSignal(float, str)
     finished_signal = pyqtSignal(str)
@@ -69,19 +63,14 @@ class DownloadWorker(QThread):
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            # [추가] 403 Forbidden 에러 방지 옵션
-            'nocheckcertificate': True,
+            # [수정] 화질 저하를 유발하는 안드로이드 클라이언트 옵션 제거
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'], # 안드로이드 -> 웹 순서로 시도
-                }
-            }
+            # 해상도를 최우선으로 정렬
+            'format_sort': ['res', 'ext:mp4:m4a', 'codec:h264:aac'],
         }
 
-        # 구간 다운로드 옵션 추가
         if is_clip_mode:
             section_arg = f"*{start_time_str}-{end_time_str}"
             ydl_opts['download_sections'] = [section_arg]
@@ -100,11 +89,13 @@ class DownloadWorker(QThread):
                 }],
             })
         else:
+            # [수정] 최고 화질 로직을 가장 강력한 옵션으로 복원
             if quality == '최고':
-                ydl_opts['format'] = f"bestvideo+bestaudio/best"
+                # bestvideo+bestaudio를 강제하고, 실패 시 best 사용
+                ydl_opts['format'] = "bestvideo+bestaudio/best"
             else:
                 height = quality.replace('p', '')
-                ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best"
+                ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]"
 
             ydl_opts['merge_output_format'] = fmt
 
@@ -121,7 +112,6 @@ class DownloadWorker(QThread):
                 else:
                     final_filename = filename
 
-                # 용량 및 시간 정보
                 filesize = info.get('filesize') or info.get('filesize_approx')
                 if filesize:
                     size_mb = f"{filesize / (1024 * 1024):.1f}MB"
