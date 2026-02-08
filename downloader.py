@@ -1,7 +1,41 @@
 import os
 import yt_dlp
 from PyQt5.QtCore import QThread, pyqtSignal
+from utils import hms_to_seconds
 
+# --- 메타데이터만 빠르게 가져오는 워커 (403 방지 옵션 추가) ---
+class MetadataWorker(QThread):
+    info_fetched = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            # [추가] 403 에러 방지를 위한 헤더 및 클라이언트 설정
+            'nocheckcertificate': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'], # 안드로이드 클라이언트로 우회 시도
+                }
+            }
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                duration = info.get('duration', 0)
+                self.info_fetched.emit({'duration': duration, 'title': info.get('title')})
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+# --- 실제 다운로드 워커 ---
 class DownloadWorker(QThread):
     progress_signal = pyqtSignal(float, str)
     finished_signal = pyqtSignal(str)
@@ -23,14 +57,35 @@ class DownloadWorker(QThread):
         else:
             video_type = "일반"
 
-        # 2. 옵션 설정 (로그 억제 포함)
+        # 2. 클립 모드(커스텀 구간) 설정
+        is_clip_mode = self.options.get('mode') == 'clip'
+        start_time_str = self.options.get('start_time', '00:00:00')
+        end_time_str = self.options.get('end_time', '00:00:00')
+
+        # yt-dlp 옵션 설정
         ydl_opts = {
             'outtmpl': os.path.join(self.options['path'], '%(title)s.%(ext)s'),
             'progress_hooks': [self.progress_hook],
             'noplaylist': True,
-            'quiet': True,           # 콘솔 로그 억제 (딜레이 체감 감소)
-            'no_warnings': True,     # 경고 메시지 억제
+            'quiet': True,
+            'no_warnings': True,
+            # [추가] 403 Forbidden 에러 방지 옵션
+            'nocheckcertificate': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'], # 안드로이드 -> 웹 순서로 시도
+                }
+            }
         }
+
+        # 구간 다운로드 옵션 추가
+        if is_clip_mode:
+            section_arg = f"*{start_time_str}-{end_time_str}"
+            ydl_opts['download_sections'] = [section_arg]
+            video_type = "구간 클립"
 
         fmt = self.options['format']
         quality = self.options['quality']
@@ -57,7 +112,6 @@ class DownloadWorker(QThread):
             final_filename = None
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # 메타데이터 추출
                 info = ydl.extract_info(self.url, download=False)
 
                 filename = ydl.prepare_filename(info)
@@ -67,26 +121,27 @@ class DownloadWorker(QThread):
                 else:
                     final_filename = filename
 
-                # 용량 계산 (클립은 용량 정보가 없을 수 있음)
-                filesize = info.get('filesize')
-                if not filesize:
-                    filesize = info.get('filesize_approx') # 예상 용량 시도
-
+                # 용량 및 시간 정보
+                filesize = info.get('filesize') or info.get('filesize_approx')
                 if filesize:
                     size_mb = f"{filesize / (1024 * 1024):.1f}MB"
                 else:
                     size_mb = "알 수 없음"
 
-                # 시간 포맷팅 (hh:mm:ss)
                 duration_sec = info.get('duration', 0)
                 m, s = divmod(duration_sec, 60)
                 h, m = divmod(m, 60)
                 duration_str = f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
 
+                if is_clip_mode:
+                    display_duration = f"{start_time_str} ~ {end_time_str}"
+                else:
+                    display_duration = duration_str
+
                 self.info_signal.emit({
                     'title': info.get('title', 'Unknown'),
                     'thumbnail': info.get('thumbnail', ''),
-                    'duration': duration_str,
+                    'duration': display_duration,
                     'filesize': size_mb,
                     'ext': fmt,
                     'video_type': video_type
@@ -94,7 +149,6 @@ class DownloadWorker(QThread):
 
                 if self.is_stopped: return
 
-                # 다운로드 시작
                 ydl.download([self.url])
 
             if not self.is_stopped and final_filename:
@@ -110,20 +164,16 @@ class DownloadWorker(QThread):
 
         if d['status'] == 'downloading':
             try:
-                # 일반적인 진행률 가져오기
                 p_str = d.get('_percent_str', '').replace('%', '')
-
                 if p_str:
                     progress = float(p_str)
                 else:
-                    # 클립 등에서 퍼센트 정보가 없을 경우 수동 계산
                     downloaded = d.get('downloaded_bytes', 0)
                     total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
                     if total > 0:
                         progress = (downloaded / total) * 100
                     else:
                         progress = 0
-
                 self.progress_signal.emit(progress, "다운로드 중...")
             except:
                 pass

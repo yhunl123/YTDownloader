@@ -56,7 +56,7 @@ class DownloadItemWidget(QWidget):
         info_layout.addWidget(self.title_label)
 
         # 2. 메타 정보 (초기값)
-        self.meta_label = QLabel(f"00:00:00 | - | {self.settings['format']} | {self.settings['quality']} | -")
+        self.meta_label = QLabel(f"- | - | {self.settings['format']} | {self.settings['quality']} | -")
         self.meta_label.setStyleSheet("color: #aaaaaa; font-size: 12px; border: none; background: transparent;")
         info_layout.addWidget(self.meta_label)
 
@@ -121,7 +121,6 @@ class DownloadItemWidget(QWidget):
 
     def update_info(self, info):
         self.title_label.setText(info['title'])
-        # 영상 길이 - 용량 - 파일 형식 - 화질 - 영상 유형
         meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']} - {info['video_type']}"
         self.meta_label.setText(meta_text)
 

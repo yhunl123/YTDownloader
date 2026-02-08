@@ -44,10 +44,29 @@ def save_history(history_data):
         print(f"히스토리 저장 실패: {e}")
 
 def validate_url(url):
-    # clip/ 경로 추가 및 ID 길이 제한({11})을 해제하고 (+로 변경) 다양한 길이를 허용
     youtube_regex = (
         r'(https?://)?(www\.)?'
         r'(youtube|youtu|youtube-nocookie)\.(com|be)/'
         r'(watch\?v=|embed/|v/|shorts/|clip/|.+\?v=)?([^&=%\?]+)')
     match = re.match(youtube_regex, url)
     return match is not None
+
+# --- 추가된 시간 관련 함수 ---
+def seconds_to_hms(seconds):
+    """초를 HH:MM:SS 문자열로 변환"""
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
+
+def hms_to_seconds(hms_str):
+    """HH:MM:SS 문자열을 초(float)로 변환"""
+    try:
+        parts = hms_str.split(':')
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+        else:
+            return 0
+    except:
+        return 0
