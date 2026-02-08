@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLineEdit, QPushButton, QLabel, QComboBox, QFileDialog,
                              QScrollArea, QMessageBox, QMenu, QAction, QRadioButton, QButtonGroup)
-from PyQt5.QtCore import Qt, QEvent, QObject
+from PyQt5.QtCore import Qt, QEvent
 
 from utils import load_settings, save_settings, validate_url, load_history, save_history, seconds_to_hms, hms_to_seconds
 from widgets import DownloadItemWidget
@@ -14,7 +14,7 @@ class YouTubeDownloaderApp(QMainWindow):
         super().__init__()
         self.settings = load_settings()
         self.meta_worker = None
-        self.current_video_duration = 0 # 현재 입력된 URL 영상의 총 길이(초)
+        self.current_video_duration = 0
         self.init_ui()
         self.restore_history_items()
 
@@ -32,9 +32,9 @@ class YouTubeDownloaderApp(QMainWindow):
         # --- 상단 입력부 (Grid Layout) ---
         input_grid = QGridLayout()
         input_grid.setSpacing(10)
-        input_grid.setColumnStretch(1, 1) # 두 번째 컬럼(입력창)이 늘어나도록
+        input_grid.setColumnStretch(1, 1)
 
-        # [Row 0] 저장 경로 (위로 이동됨)
+        # [Row 0] 저장 경로
         path_label = QLabel("저장 경로 :")
         path_label.setFixedWidth(80)
         self.path_input = QLineEdit()
@@ -46,7 +46,6 @@ class YouTubeDownloaderApp(QMainWindow):
         self.btn_find.setStyleSheet("background-color: #444; padding: 5px;")
         self.btn_find.clicked.connect(self.select_directory)
 
-        # 화질/형식은 이제 아래쪽이나 다른 곳에 배치하는게 좋지만, 기존 유지하며 위치만 조정
         lbl_quality = QLabel("화질")
         lbl_quality.setAlignment(Qt.AlignCenter)
         self.combo_quality = QComboBox()
@@ -68,30 +67,33 @@ class YouTubeDownloaderApp(QMainWindow):
         self.rb_clip = QRadioButton("클립 모드")
         self.rb_normal.setChecked(True) # 기본값
 
-        # 스타일
+        # 스타일 설정
         rb_style = "QRadioButton { color: white; } QRadioButton::indicator:checked { background-color: #3498db; border: 2px solid white; border-radius: 6px; }"
         self.rb_normal.setStyleSheet(rb_style)
         self.rb_clip.setStyleSheet(rb_style)
 
+        # 그룹 설정 (배타적 선택)
         self.btn_group = QButtonGroup()
         self.btn_group.addButton(self.rb_normal)
         self.btn_group.addButton(self.rb_clip)
-        self.btn_group.buttonToggled.connect(self.toggle_clip_ui)
+
+        # [수정] 신호 연결 방식 변경 (튕김 해결)
+        # 그룹 신호 대신 rb_clip의 toggled 신호 사용
+        self.rb_clip.toggled.connect(self.toggle_clip_ui)
 
         mode_layout.addWidget(self.rb_normal)
         mode_layout.addWidget(self.rb_clip)
         mode_layout.addStretch(1)
 
         input_grid.addWidget(mode_label, 1, 0)
-        input_grid.addLayout(mode_layout, 1, 1, 1, 4) # Span across columns
+        input_grid.addLayout(mode_layout, 1, 1, 1, 4)
 
-        # [Row 2] 링크 URL (아래로 이동됨)
+        # [Row 2] 링크 URL
         url_label = QLabel("링크 URL :")
         url_label.setFixedWidth(80)
         self.url_input = QLineEdit()
         self.url_input.setStyleSheet("padding: 5px; background-color: #333; border: 1px solid #555; color: white;")
         self.url_input.returnPressed.connect(self.add_download_task)
-        # Focus Out 이벤트 필터 설치
         self.url_input.installEventFilter(self)
 
         self.btn_input = QPushButton("입력")
@@ -115,7 +117,7 @@ class YouTubeDownloaderApp(QMainWindow):
 
         main_layout.addLayout(input_grid)
 
-        # [Row 3] 시간 입력 (클립 모드용, 초기에는 숨김)
+        # [Row 3] 시간 입력 (클립 모드용)
         self.time_widget = QWidget()
         time_layout = QHBoxLayout(self.time_widget)
         time_layout.setContentsMargins(0, 0, 0, 0)
@@ -134,8 +136,6 @@ class YouTubeDownloaderApp(QMainWindow):
         self.input_end.setFixedWidth(100)
         self.input_end.setAlignment(Qt.AlignCenter)
         self.input_end.setStyleSheet("padding: 5px; background-color: #333; border: 1px solid #555; color: white;")
-
-        # 종료 시간 변경 시 유효성 검사 연결
         self.input_end.editingFinished.connect(self.validate_end_time)
 
         time_layout.addWidget(lbl_start)
@@ -146,7 +146,7 @@ class YouTubeDownloaderApp(QMainWindow):
         time_layout.addStretch(1)
 
         main_layout.addWidget(self.time_widget)
-        self.time_widget.setVisible(False) # 초기 숨김
+        self.time_widget.setVisible(False)
 
         # 구분선
         line = QLabel()
@@ -184,47 +184,47 @@ class YouTubeDownloaderApp(QMainWindow):
 
         main_layout.addWidget(self.scroll_area)
 
-    def toggle_clip_ui(self):
+    # [수정] 매개변수 checked 추가 (오류 해결)
+    def toggle_clip_ui(self, checked):
         """라디오 버튼 토글 시 UI 변경"""
-        is_clip = self.rb_clip.isChecked()
-        self.time_widget.setVisible(is_clip)
+        self.time_widget.setVisible(checked)
 
-        # 클립 모드로 전환됐는데 URL이 이미 있다면 메타데이터 로드 시도
-        if is_clip and self.url_input.text().strip():
+        # 클립 모드로 켜졌을 때 URL이 있다면 메타데이터 로드
+        if checked and self.url_input.text().strip():
             self.fetch_metadata(self.url_input.text().strip())
 
     def eventFilter(self, source, event):
-        """URL 입력창 Focus Out 이벤트 감지"""
         if source == self.url_input and event.type() == QEvent.FocusOut:
-            if self.rb_clip.isChecked(): # 클립 모드일 때만
+            if self.rb_clip.isChecked():
                 url = self.url_input.text().strip()
                 if url:
                     self.fetch_metadata(url)
         return super().eventFilter(source, event)
 
     def fetch_metadata(self, url):
-        """메타데이터 가져오기 (비동기)"""
         if not validate_url(url): return
 
-        # 중복 실행 방지 or 기존 작업 중단 로직이 필요할 수 있으나 여기선 간단히
+        # [안전장치] 이전 워커가 실행 중이면 정리
+        if self.meta_worker and self.meta_worker.isRunning():
+            try:
+                self.meta_worker.quit()
+                self.meta_worker.wait()
+            except:
+                pass
+
         self.meta_worker = MetadataWorker(url)
         self.meta_worker.info_fetched.connect(self.on_metadata_fetched)
         self.meta_worker.start()
 
     def on_metadata_fetched(self, info):
-        """메타데이터 로드 완료 시 시간 설정"""
         duration = info.get('duration', 0)
-        self.current_video_duration = duration # 저장해둠 (검증용)
+        self.current_video_duration = duration
 
-        # 시작 시간 00:00:00
         self.input_start.setText("00:00:00")
-
-        # 종료 시간 = 영상 길이
         end_time_str = seconds_to_hms(duration)
         self.input_end.setText(end_time_str)
 
     def validate_end_time(self):
-        """종료 시간이 영상 길이보다 길면 수정"""
         text = self.input_end.text()
         user_seconds = hms_to_seconds(text)
 
@@ -246,7 +246,6 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.warning(self, "오류", "유효하지 않은 유튜브 링크입니다.")
             return
 
-        # 중복 방지
         for i in range(self.list_layout.count()):
             widget = self.list_layout.itemAt(i).widget()
             if widget and isinstance(widget, DownloadItemWidget):
@@ -265,7 +264,6 @@ class YouTubeDownloaderApp(QMainWindow):
             QMessageBox.critical(self, "오류", f"경로를 생성할 수 없습니다.\n{e}")
             return
 
-        # 옵션 수집
         mode = "clip" if self.rb_clip.isChecked() else "normal"
         current_options = {
             'path': save_path,
@@ -275,7 +273,6 @@ class YouTubeDownloaderApp(QMainWindow):
         }
 
         if mode == "clip":
-            # 시간 검증 한 번 더 수행
             self.validate_end_time()
             current_options['start_time'] = self.input_start.text()
             current_options['end_time'] = self.input_end.text()
@@ -287,7 +284,6 @@ class YouTubeDownloaderApp(QMainWindow):
         self.list_layout.insertWidget(0, item_widget)
         self.url_input.clear()
 
-        # 입력 후 시간 초기화
         if mode == "clip":
             self.input_start.setText("00:00:00")
             self.input_end.setText("00:00:00")

@@ -20,6 +20,11 @@ class DownloadItemWidget(QWidget):
         self.saved_path = None
         self.restore_data = restore_data
 
+        # 메타데이터 저장을 위한 변수
+        self.cached_duration = ""
+        self.cached_ext = ""
+        self.cached_type = ""
+
         self.init_ui()
 
         if self.restore_data:
@@ -121,6 +126,11 @@ class DownloadItemWidget(QWidget):
 
     def update_info(self, info):
         self.title_label.setText(info['title'])
+        # 나중에 업데이트를 위해 캐싱
+        self.cached_duration = info['duration']
+        self.cached_ext = info['ext']
+        self.cached_type = info['video_type']
+
         meta_text = f"{info['duration']} - {info['filesize']} - {info['ext']} - {self.settings['quality']} - {info['video_type']}"
         self.meta_label.setText(meta_text)
 
@@ -137,14 +147,21 @@ class DownloadItemWidget(QWidget):
         if value < 100:
             self.status_label.setText(f"{msg} ({value:.1f}%)")
 
-    def on_finished(self, final_path):
+    # [수정] 완료 시 실제 파일 크기를 받아서 UI 업데이트
+    def on_finished(self, final_path, final_size):
         self.pbar.setValue(100)
         self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #2ecc71; }")
+
         self.status_label.setText("다운로드 완료")
         self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px; border: none; background: transparent;")
         self.saved_path = final_path
         self.worker = None
         self.is_completed = True
+
+        # 실제 파일 크기로 메타 텍스트 업데이트
+        if self.cached_duration: # 정보가 로드된 상태라면
+            new_meta_text = f"{self.cached_duration} - {final_size} - {self.cached_ext} - {self.settings['quality']} - {self.cached_type}"
+            self.meta_label.setText(new_meta_text)
 
     def on_error(self, err_msg):
         self.pbar.setStyleSheet("QProgressBar::chunk { background-color: #e74c3c; }")
