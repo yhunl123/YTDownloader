@@ -14,13 +14,11 @@ class MetadataWorker(QThread):
         self.url = url
 
     def run(self):
-        # [최적화] 정보 읽기 속도 향상을 위해 불필요한 데이터 제외
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'writesubtitles': False, # 자막 제외
-            'writeautomaticsub': False,
+            'writesubtitles': False,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
@@ -61,7 +59,7 @@ class DownloadWorker(QThread):
         fmt = self.options['format']
         quality = self.options['quality']
 
-        # [Step 1] 메타데이터 추출용 옵션 (가볍게 설정)
+        # [Step 1] 메타데이터 추출 (파일명 생성용)
         extract_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -88,7 +86,7 @@ class DownloadWorker(QThread):
                 else:
                     base_name = safe_title
 
-                # 파일명 중복 체크 및 넘버링
+                # 중복 처리
                 filename_candidate = f"{base_name}.{ext}"
                 full_path_candidate = os.path.join(save_path, filename_candidate)
 
@@ -100,7 +98,7 @@ class DownloadWorker(QThread):
 
                 final_save_name_no_ext = os.path.splitext(full_path_candidate)[0]
 
-            # [Step 2] 실제 다운로드 옵션
+            # [Step 2] 다운로드 옵션 설정
             ydl_opts = {
                 'outtmpl': f"{final_save_name_no_ext}.%(ext)s",
                 'progress_hooks': [self.progress_hook],
@@ -111,24 +109,22 @@ class DownloadWorker(QThread):
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                # [속도 개선] 병렬 다운로드 수 증가 (네트워크 속도 향상)
-                'concurrent_fragment_downloads': 8,
                 'retries': 10,
                 'format_sort': ['res', 'ext:mp4:m4a', 'codec:h264:aac'],
             }
 
+            # [핵심 변경] 클립 모드 처리 방식 변경
             if is_clip_mode:
-                start_sec = hms_to_seconds(start_time_str)
-                end_sec = hms_to_seconds(end_time_str)
-
-                def download_range_func(info, ydl):
-                    return [{'start_time': start_sec, 'end_time': end_sec}]
-
-                ydl_opts['download_ranges'] = download_range_func
-
-                # [중요] 소리 끊김 방지를 위해 True로 복원
-                # 속도는 조금 느려지더라도 안정적인 결과물을 위해 필수입니다.
-                ydl_opts['force_keyframes_at_cuts'] = True
+                # yt-dlp의 download_ranges 대신 FFmpeg를 외부 다운로더로 지정
+                # FFmpeg가 직접 URL에 접속해서 지정된 시간만큼만 데이터를 가져옴
+                # 이 방식이 오디오 싱크 문제 해결에 가장 확실함
+                ydl_opts['external_downloader'] = {'default': 'ffmpeg'}
+                ydl_opts['external_downloader_args'] = {
+                    'ffmpeg_i': ['-ss', start_time_str, '-to', end_time_str]
+                }
+            else:
+                # 일반 모드에서는 병렬 다운로드 활성화 (속도 향상)
+                ydl_opts['concurrent_fragment_downloads'] = 8
 
             if fmt == 'mp3':
                 ydl_opts.update({
