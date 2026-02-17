@@ -1,6 +1,6 @@
 # YouTube Downloader Project
 
-### - 본 프로그램은 GEMINI AI 를 사용해서 제작된 프로그램 입니다. AI 대화 전문 : https://gemini.google.com/share/6c24babc72db
+### - 본 프로그램은 GEMINI AI 를 사용해서 제작된 프로그램 입니다. AI 대화 전문 : https://gemini.google.com/share/4fb993267259
 
 **PyQt5**와 **yt-dlp**를 기반으로 제작된 올인원 유튜브 다운로더입니다.
 직관적인 GUI 환경에서 일반 영상, 쇼츠(Shorts), 클립(Clip)을 고화질 영상과 고음질 음원(MP3)으로 손쉽게 다운로드하고 관리할 수 있습니다.
